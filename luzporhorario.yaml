@@ -70,23 +70,19 @@ blueprint:
 
 trigger:
 
-  # Presença detectada (somente se houver sensor)
   - platform: state
     entity_id: !input sensor_presenca
     to: "on"
 
-  # Ausência pelo tempo configurado (somente se houver sensor)
   - platform: state
     entity_id: !input sensor_presenca
     to: "off"
     for:
       seconds: !input tempo_ausencia
 
-  # Horário de ligar
   - platform: time
     at: !input horario_inicio
 
-  # Horário de desligar
   - platform: time
     at: !input horario_fim
 
@@ -95,13 +91,12 @@ variables:
   sensor_lux: !input sensor_lux
   usar_lux: !input usar_lux_no_horario
   limite_lux: !input limite_lux
+  luzes: !input luzes
 
 action:
   - choose:
 
-      ###################################################################
       # 1 — LIGAR NO HORÁRIO (com luminosidade opcional)
-      ###################################################################
       - conditions:
           - condition: template
             value_template: >
@@ -111,20 +106,15 @@ action:
           - service: homeassistant.turn_on
             target: !input luzes
 
-      ###################################################################
       # 2 — DESLIGAR NO HORÁRIO FINAL
-      ###################################################################
       - conditions:
-          # Condição simples, já que trigger é horário exato
           - condition: template
             value_template: "true"
         sequence:
           - service: homeassistant.turn_off
             target: !input luzes
 
-      ###################################################################
       # 3 — LIGAR POR PRESENÇA FORA DO HORÁRIO (somente se houver sensor)
-      ###################################################################
       - conditions:
           - condition: template
             value_template: >
@@ -137,20 +127,14 @@ action:
           - service: homeassistant.turn_on
             target: !input luzes
 
-      ###################################################################
       # 4 — DESLIGAR POR AUSÊNCIA (somente se houver sensor)
-      ###################################################################
       - conditions:
           - condition: template
             value_template: >
               {{ sensor_presenca != '' and
                  is_state(sensor_presenca, 'off') and
-                 (luzes_acesas) 
+                 (expand(luzes) | selectattr('state', 'eq', 'on') | list | count > 0)
               }}
         sequence:
           - service: homeassistant.turn_off
             target: !input luzes
-
-variables:
-  luzes_acesas: >
-    {{ expand(luzes) | selectattr('state', 'eq', 'on') | list | count > 0 }}
