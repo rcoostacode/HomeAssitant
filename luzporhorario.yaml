@@ -1,12 +1,12 @@
 blueprint:
-  name: Luz com Horário
+  name: Luz com Horário (com flags para sensores opcionais)
   description: >
     Automação completa com horário, presença opcional e luminosidade opcional.
     - Liga no horário inicial (com ou sem lux)
     - Desliga no horário final
-    - Fora do horário liga por presença (se existir sensor)
+    - Fora do horário liga por presença (se habilitado e sensor existir)
     - Após pôr do sol, presença não liga mais
-    - Desliga por ausência (se existir sensor)
+    - Desliga por ausência (se habilitado e sensor existir)
   domain: automation
 
   input:
@@ -19,21 +19,33 @@ blueprint:
             domain: [light, switch]
 
     sensor_presenca:
-      name: Sensor de presença (opcional)
+      name: Sensor de presença
       default: ""
       selector:
         entity:
           domain: binary_sensor
 
+    usar_sensor_presenca:
+      name: Usar sensor de presença?
+      default: false
+      selector:
+        boolean:
+
     sensor_lux:
-      name: Sensor de luminosidade (opcional)
+      name: Sensor de luminosidade
       default: ""
       selector:
         entity:
           domain: sensor
 
+    usar_sensor_lux:
+      name: Usar sensor de luminosidade?
+      default: false
+      selector:
+        boolean:
+
     limite_lux:
-      name: Limiar de luminosidade para ligar (opcional)
+      name: Limiar de luminosidade para ligar
       default: 20
       selector:
         number:
@@ -41,14 +53,8 @@ blueprint:
           max: 5000
           mode: box
 
-    usar_lux_no_horario:
-      name: Usar luminosidade no horário principal?
-      default: false
-      selector:
-        boolean:
-
     tempo_ausencia:
-      name: Tempo sem presença para desligar (se houver sensor)
+      name: Tempo sem presença para desligar (se usar sensor de presença)
       selector:
         number:
           min: 1
@@ -69,7 +75,18 @@ blueprint:
         time:
 
 trigger:
-  # Triggers só de horário para evitar erros com sensores opcionais
+  # Triggers de presença (sempre presentes para evitar erro)
+  - platform: state
+    entity_id: !input sensor_presenca
+    to: "on"
+
+  - platform: state
+    entity_id: !input sensor_presenca
+    to: "off"
+    for:
+      seconds: !input tempo_ausencia
+
+  # Triggers de horário
   - platform: time
     at: !input horario_inicio
 
@@ -78,19 +95,20 @@ trigger:
 
 variables:
   sensor_presenca: !input sensor_presenca
+  usar_sensor_presenca: !input usar_sensor_presenca
   sensor_lux: !input sensor_lux
-  usar_lux: !input usar_lux_no_horario
+  usar_sensor_lux: !input usar_sensor_lux
   limite_lux: !input limite_lux
   luzes: !input luzes
 
 action:
   - choose:
 
-      # 1 — LIGAR NO HORÁRIO (com luminosidade opcional)
+      # 1 — LIGAR NO HORÁRIO (com luminosidade opcional e flag)
       - conditions:
           - condition: template
             value_template: >
-              {{ not usar_lux or
+              {{ not usar_sensor_lux or
                  (sensor_lux != "" and (states(sensor_lux) | float(9999) < limite_lux)) }}
         sequence:
           - service: homeassistant.turn_on
@@ -104,11 +122,12 @@ action:
           - service: homeassistant.turn_off
             target: !input luzes
 
-      # 3 — LIGAR POR PRESENÇA FORA DO HORÁRIO (se sensor existir)
+      # 3 — LIGAR POR PRESENÇA FORA DO HORÁRIO (se habilitado e sensor existir)
       - conditions:
           - condition: template
             value_template: >
-              {{ sensor_presenca != "" and
+              {{ usar_sensor_presenca and
+                 sensor_presenca != "" and
                  is_state(sensor_presenca, 'on') and
                  is_state('sun.sun', 'above_horizon') and
                  not (inputs.horario_inicio <= now().strftime('%H:%M:%S') <= inputs.horario_fim)
@@ -117,11 +136,12 @@ action:
           - service: homeassistant.turn_on
             target: !input luzes
 
-      # 4 — DESLIGAR POR AUSÊNCIA (se sensor existir)
+      # 4 — DESLIGAR POR AUSÊNCIA (se habilitado e sensor existir)
       - conditions:
           - condition: template
             value_template: >
-              {{ sensor_presenca != "" and
+              {{ usar_sensor_presenca and
+                 sensor_presenca != "" and
                  is_state(sensor_presenca, 'off') and
                  (expand(luzes) | selectattr('state', 'eq', 'on') | list | count > 0)
               }}
