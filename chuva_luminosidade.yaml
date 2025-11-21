@@ -1,15 +1,15 @@
 blueprint:
-  name: Chuva, Lux, Previsão
+  name: Chuva, Dia/Noite e Temperatura
   description: |
-    Fecha a cobertura automaticamente quando detectar chuva.
-    Reabre apenas se não estiver chovendo, respeitando luminosidade mínima e temperatura da previsão.
-    Suporta sensor de posição e notificações.
+    1) Fecha sempre que chover e não reabre sozinha pela chuva.
+    2) Abre de dia se a temperatura estiver acima do valor definido.
+    3) Fecha à noite com base no sensor de luminosidade.
   domain: automation
 
   input:
     rain_sensor:
       name: Sensor de Chuva
-      description: Sensor binário que indica chuva (on chovendo, off seco)
+      description: Binary_sensor que indica chuva (on chovendo, off seco)
       selector:
         entity:
           filter:
@@ -17,238 +17,165 @@ blueprint:
 
     cover_entity:
       name: Cobertura
-      description: Cobertura motorizada a ser controlada
+      description: Cobertura motorizada
       selector:
         entity:
           filter:
             - domain: cover
 
+    position_sensor:
+      name: Sensor de Porta da Cobertura
+      description: Binary_sensor que indica se a cobertura está aberta (on) ou fechada (off)
+      selector:
+        entity:
+          filter:
+            - domain: binary_sensor
+
+    lux_sensor:
+      name: Sensor de Luminosidade
+      description: Sensor de lux usado para saber se é dia ou noite
+      selector:
+        entity:
+          filter:
+            - domain: sensor
+
     weather_entity:
       name: Entidade de Tempo
-      description: Entidade weather usada para condição de chuva e temperatura
+      description: Entidade weather usada para pegar a temperatura
       default: weather.home
       selector:
         entity:
           filter:
             - domain: weather
 
-    auto_reopen_section:
-      name: Reabertura Automática
-      icon: mdi:weather-sunny
-      description: Configurações para reabrir automaticamente após a chuva
-      collapsed: true
-      input:
-        enable_auto_reopen:
-          name: Habilitar Reabertura Automática
-          description: Reabrir cobertura automaticamente quando parar de chover
-          default: false
-          selector:
-            boolean:
+    day_lux_threshold:
+      name: Limite de Lux para Considerar Dia
+      description: Acima deste valor é dia; abaixo é noite
+      default: 1000
+      selector:
+        number:
+          min: 1
+          max: 20000
+          unit_of_measurement: lx
+          step: 100
 
-        lux_sensor:
-          name: Sensor de Luminosidade (Opcional)
-          description: Sensor de lux usado para decidir se pode reabrir
-          default: {}
-          selector:
-            entity:
-              filter:
-                - domain: sensor
-
-        min_lux:
-          name: Luminosidade Mínima para Reabrir
-          description: Valor mínimo de lux para reabrir; 0 desativa esta verificação
-          default: 0
-          selector:
-            number:
-              min: 0
-              max: 50000
-              unit_of_measurement: lx
-              step: 100
-
-        min_forecast_temp:
-          name: Temperatura Mínima para Reabrir
-          description: Temperatura mínima da entidade de tempo para permitir reabertura
-          default: 22
-          selector:
-            number:
-              min: -10
-              max: 50
-              unit_of_measurement: °C
-              step: 1
-
-    position_section:
-      name: Sensor de Posição
-      icon: mdi:arrow-expand-vertical
-      description: Sensor adicional para indicar se a cobertura está aberta ou fechada
-      collapsed: true
-      input:
-        position_sensor:
-          name: Sensor de Posição (Opcional)
-          description: Binary_sensor onde on é aberta e off é fechada
-          default: {}
-          selector:
-            entity:
-              filter:
-                - domain: binary_sensor
-
-    advanced_section:
-      name: Configurações Avançadas
-      icon: mdi:cog
-      description: Opções extras de comportamento da automação
-      collapsed: true
-      input:
-        rain_confirmation_delay:
-          name: Tempo de Confirmação de Chuva
-          description: Segundos para confirmar chuva antes de fechar a cobertura
-          default: 3
-          selector:
-            number:
-              min: 0
-              max: 30
-              unit_of_measurement: seconds
-              step: 1
-
-        send_notification:
-          name: Enviar Notificações
-          description: Enviar notificação quando a cobertura for fechada ou aberta automaticamente
-          default: false
-          selector:
-            boolean:
-
-        notification_service:
-          name: Serviço de Notificação
-          description: Nome do serviço de notificação, como notify.notify ou notify.mobile_app_celular
-          default: "notify.notify"
-          selector:
-            text:
+    min_day_temperature:
+      name: Temperatura Mínima para Abrir de Dia
+      description: Só abre de dia se temperatura da entidade weather for maior ou igual a este valor
+      default: 22
+      selector:
+        number:
+          min: -10
+          max: 50
+          unit_of_measurement: °C
+          step: 1
 
 variables:
-  enable_auto_reopen: !input enable_auto_reopen
-  lux_sensor: !input lux_sensor
-  min_lux: !input min_lux
-  position_sensor: !input position_sensor
-  send_notification: !input send_notification
-  notification_service: !input notification_service
+  rain_sensor: !input rain_sensor
   cover_entity: !input cover_entity
+  position_sensor: !input position_sensor
+  lux_sensor: !input lux_sensor
   weather_entity: !input weather_entity
-  min_forecast_temp: !input min_forecast_temp
+  day_lux_threshold: !input day_lux_threshold
+  min_day_temperature: !input min_day_temperature
 
 triggers:
-  - platform: state
-    id: rain_detected
+  # 1) Começou a chover -> sempre fecha
+  - id: chuva_começou
+    platform: state
     entity_id: !input rain_sensor
     to: "on"
 
-  - platform: state
-    id: rain_stopped
-    entity_id: !input rain_sensor
-    to: "off"
+  # 2) Mudança de luminosidade -> pode abrir/fechar pelo dia/noite
+  - id: mudou_lux
+    platform: state
+    entity_id: !input lux_sensor
+
+  # 3) Mudança de temperatura -> pode abrir de dia se estiver quente
+  - id: mudou_temp
+    platform: state
+    entity_id: !input weather_entity
+
+  # 4) Mudança manual de posição (porta) – para corrigir estado se usuário mexer
+  - id: mudou_posicao
+    platform: state
+    entity_id: !input position_sensor
 
 conditions: []
 
 actions:
   - choose:
-
-      # ======== CENÁRIO 1: CHUVA DETECTADA - FECHAR ========
+      # ======================================================
+      # REGRA 1 – CHUVA: FECHAR E NÃO REABRIR PELA CHUVA
+      # ======================================================
       - conditions:
           - condition: trigger
-            id: rain_detected
+            id: chuva_começou
         sequence:
-          - delay:
-              seconds: !input rain_confirmation_delay
-
+          # Se já estiver fechada pelo sensor de porta, não faz nada
           - condition: state
-            entity_id: !input rain_sensor
-            state: "on"
-
-          - choose:
-              - conditions:
-                  - condition: template
-                    value_template: "{{ position_sensor != {} }}"
-                  - condition: state
-                    entity_id: !input position_sensor
-                    state: "on"
-                sequence: []
-            default:
-              - condition: template
-                value_template: >
-                  {{ is_state(cover_entity, 'open') or
-                     is_state(cover_entity, 'opening') }}
+            entity_id: !input position_sensor
+            state: "on"   # só fecha se o sensor diz que está aberta
 
           - service: cover.close_cover
             target:
               entity_id: !input cover_entity
 
-          - choose:
-              - conditions:
-                  - condition: template
-                    value_template: "{{ send_notification }}"
-                sequence:
-                  - service: "{{ notification_service }}"
-                    data:
-                      title: "Cobertura Fechada por Chuva"
-                      message: "Chuva detectada. Cobertura fechada automaticamente às {{ now().strftime('%H:%M') }}."
-
-      # ======== CENÁRIO 2: CHUVA PAROU - REABRIR (SE HABILITADO) ========
+      # ======================================================
+      # REGRA 2 – DIA + TEMPERATURA: ABRIR
+      # ======================================================
       - conditions:
-          - condition: trigger
-            id: rain_stopped
-          - condition: template
-            value_template: "{{ enable_auto_reopen }}"
+          - condition: or
+            conditions:
+              - condition: trigger
+                id: mudou_lux
+              - condition: trigger
+                id: mudou_temp
         sequence:
+          # Nunca abrir se estiver chovendo
           - condition: state
             entity_id: !input rain_sensor
             state: "off"
 
-          - condition: template
-            value_template: >
-              {% set cond = state_attr(weather_entity, 'condition') %}
-              {{ cond not in ['rain', 'pouring', 'lightning', 'lightning-rainy', 'snow', 'hail'] }}
+          # Verifica se é dia pelo lux
+          - condition: numeric_state
+            entity_id: !input lux_sensor
+            above: !input day_lux_threshold
 
+          # Verifica temperatura da entidade weather
           - condition: template
             value_template: >
               {% set temp = state_attr(weather_entity, 'temperature') %}
-              {{ temp is number and temp >= min_forecast_temp }}
+              {{ temp is number and temp >= min_day_temperature }}
 
-          - choose:
-              - conditions:
-                  - condition: template
-                    value_template: "{{ lux_sensor != {} and min_lux > 0 }}"
-                sequence:
-                  - condition: numeric_state
-                    entity_id: !input lux_sensor
-                    above: !input min_lux
-
-          - choose:
-              - conditions:
-                  - condition: template
-                    value_template: "{{ position_sensor != {} }}"
-                  - condition: state
-                    entity_id: !input position_sensor
-                    state: "off"
-                sequence: []
-            default:
-              - condition: template
-                value_template: >
-                  {{ is_state(cover_entity, 'closed') or
-                     is_state(cover_entity, 'closing') }}
+          # Só abre se estiver fechada pelo sensor de porta
+          - condition: state
+            entity_id: !input position_sensor
+            state: "off"
 
           - service: cover.open_cover
             target:
               entity_id: !input cover_entity
 
-          - choose:
-              - conditions:
-                  - condition: template
-                    value_template: "{{ send_notification }}"
-                sequence:
-                  - service: "{{ notification_service }}"
-                    data:
-                      title: "Cobertura Aberta após Chuva"
-                      message: >
-                        Cobertura reaberta automaticamente às {{ now().strftime('%H:%M') }}.
-                        {% set temp = state_attr(weather_entity, 'temperature') %}
-                        {% if temp is number %}Temperatura: {{ temp }} °C. {% endif %}
-                        {% if lux_sensor != {} %}Luminosidade: {{ states(lux_sensor) }} lx.{% endif %}
+      # ======================================================
+      # REGRA 3 – NOITE: FECHAR
+      # ======================================================
+      - conditions:
+          - condition: trigger
+            id: mudou_lux
+        sequence:
+          # Se lux caiu abaixo do limite, consideramos noite
+          - condition: numeric_state
+            entity_id: !input lux_sensor
+            below: !input day_lux_threshold
+
+          # Só fecha se estiver aberta pelo sensor de porta
+          - condition: state
+            entity_id: !input position_sensor
+            state: "on"
+
+          - service: cover.close_cover
+            target:
+              entity_id: !input cover_entity
 
 mode: restart
