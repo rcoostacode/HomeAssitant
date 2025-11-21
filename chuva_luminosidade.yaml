@@ -9,7 +9,7 @@ blueprint:
   input:
     rain_sensor:
       name: Sensor de Chuva
-      description: Sensor binário que indica chuva (on = chovendo, off = seco)
+      description: Sensor binário que indica chuva (on chovendo, off seco)
       selector:
         entity:
           filter:
@@ -24,8 +24,8 @@ blueprint:
             - domain: cover
 
     weather_entity:
-      name: Entidade de Previsão do Tempo
-      description: Entidade weather usada para checar condição e temperatura
+      name: Entidade de Tempo
+      description: Entidade weather usada para condição de chuva e temperatura
       default: weather.home
       selector:
         entity:
@@ -47,7 +47,7 @@ blueprint:
 
         lux_sensor:
           name: Sensor de Luminosidade (Opcional)
-          description: Sensor de lux a ser usado na decisão de reabertura
+          description: Sensor de lux usado para decidir se pode reabrir
           default: {}
           selector:
             entity:
@@ -56,7 +56,7 @@ blueprint:
 
         min_lux:
           name: Luminosidade Mínima para Reabrir
-          description: Valor mínimo de lux necessário para reabrir; 0 desativa essa verificação
+          description: Valor mínimo de lux para reabrir; 0 desativa esta verificação
           default: 0
           selector:
             number:
@@ -67,7 +67,7 @@ blueprint:
 
         min_forecast_temp:
           name: Temperatura Mínima para Reabrir
-          description: Usa a temperatura atual da entidade de tempo; só abre se for maior ou igual ao valor definido
+          description: Temperatura mínima da entidade de tempo para permitir reabertura
           default: 22
           selector:
             number:
@@ -79,12 +79,12 @@ blueprint:
     position_section:
       name: Sensor de Posição
       icon: mdi:arrow-expand-vertical
-      description: Sensor adicional para verificar estado real da cobertura
+      description: Sensor adicional para indicar se a cobertura está aberta ou fechada
       collapsed: true
       input:
         position_sensor:
           name: Sensor de Posição (Opcional)
-          description: Binary_sensor onde on significa aberta e off significa fechada
+          description: Binary_sensor onde on é aberta e off é fechada
           default: {}
           selector:
             entity:
@@ -94,12 +94,12 @@ blueprint:
     advanced_section:
       name: Configurações Avançadas
       icon: mdi:cog
-      description: Opções extras de comportamento
+      description: Opções extras de comportamento da automação
       collapsed: true
       input:
         rain_confirmation_delay:
           name: Tempo de Confirmação de Chuva
-          description: Segundos para confirmar que está realmente chovendo antes de fechar
+          description: Segundos para confirmar chuva antes de fechar a cobertura
           default: 3
           selector:
             number:
@@ -117,7 +117,7 @@ blueprint:
 
         notification_service:
           name: Serviço de Notificação
-          description: Serviço de notificação, como notify.notify ou notify.mobile_app_celular
+          description: Nome do serviço de notificação, como notify.notify ou notify.mobile_app_celular
           default: "notify.notify"
           selector:
             text:
@@ -154,23 +154,20 @@ actions:
           - condition: trigger
             id: rain_detected
         sequence:
-          # Aguarda confirmação (evita falsos positivos rápidos)
           - delay:
               seconds: !input rain_confirmation_delay
 
-          # Confirma que ainda está chovendo
           - condition: state
             entity_id: !input rain_sensor
             state: "on"
 
-          # Verifica se cobertura está aberta (usa sensor de posição se existir)
           - choose:
               - conditions:
                   - condition: template
                     value_template: "{{ position_sensor != {} }}"
                   - condition: state
                     entity_id: !input position_sensor
-                    state: "on"   # aberta
+                    state: "on"
                 sequence: []
             default:
               - condition: template
@@ -178,12 +175,10 @@ actions:
                   {{ is_state(cover_entity, 'open') or
                      is_state(cover_entity, 'opening') }}
 
-          # Fecha a cobertura
           - service: cover.close_cover
             target:
               entity_id: !input cover_entity
 
-          # Notificação opcional
           - choose:
               - conditions:
                   - condition: template
@@ -201,24 +196,20 @@ actions:
           - condition: template
             value_template: "{{ enable_auto_reopen }}"
         sequence:
-          # Garante que o sensor de chuva físico está seco
           - condition: state
             entity_id: !input rain_sensor
             state: "off"
 
-          # Garante que condição atual do weather não é de chuva
           - condition: template
             value_template: >
               {% set cond = state_attr(weather_entity, 'condition') %}
               {{ cond not in ['rain', 'pouring', 'lightning', 'lightning-rainy', 'snow', 'hail'] }}
 
-          # Verifica temperatura da entidade weather (usa atributo 'temperature')
           - condition: template
             value_template: >
               {% set temp = state_attr(weather_entity, 'temperature') %}
               {{ temp is number and temp >= min_forecast_temp }}
 
-          # Verifica luminosidade (se configurada e min_lux > 0)
           - choose:
               - conditions:
                   - condition: template
@@ -228,14 +219,13 @@ actions:
                     entity_id: !input lux_sensor
                     above: !input min_lux
 
-          # Verifica se cobertura está fechada (usa sensor de posição se existir)
           - choose:
               - conditions:
                   - condition: template
                     value_template: "{{ position_sensor != {} }}"
                   - condition: state
                     entity_id: !input position_sensor
-                    state: "off"   # fechada
+                    state: "off"
                 sequence: []
             default:
               - condition: template
@@ -243,12 +233,10 @@ actions:
                   {{ is_state(cover_entity, 'closed') or
                      is_state(cover_entity, 'closing') }}
 
-          # Abre a cobertura
           - service: cover.open_cover
             target:
               entity_id: !input cover_entity
 
-          # Notificação opcional
           - choose:
               - conditions:
                   - condition: template
