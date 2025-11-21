@@ -22,7 +22,6 @@ blueprint:
           filter:
             - domain: cover
     
-    # OPCIONAIS - Reabertura Automática
     auto_reopen_section:
       name: Reabertura Automática
       icon: mdi:weather-sunny
@@ -59,7 +58,7 @@ blueprint:
         
         min_lux:
           name: Luminosidade Mínima para Reabrir
-          description: Valor mínimo de lux necessário para reabrir (0 = desabilita verificação)
+          description: Valor mínimo de lux necessário para reabrir (0 = desabilita)
           default: 0
           selector:
             number:
@@ -68,7 +67,6 @@ blueprint:
               unit_of_measurement: lux
               step: 100
     
-    # OPCIONAIS - Sensor de Posição
     position_section:
       name: Sensor de Posição
       icon: mdi:arrow-expand-vertical
@@ -76,7 +74,7 @@ blueprint:
       collapsed: true
       input:
         position_sensor:
-          name: Sensor de Posição Aberto/Fechado (Opcional)
+          name: Sensor de Posição (Opcional)
           description: Sensor binário que indica se cobertura está aberta
           default: {}
           selector:
@@ -84,7 +82,6 @@ blueprint:
               filter:
                 - domain: binary_sensor
     
-    # OPCIONAIS - Comportamento Avançado
     advanced_section:
       name: Configurações Avançadas
       icon: mdi:cog
@@ -92,7 +89,7 @@ blueprint:
       input:
         rain_confirmation_delay:
           name: Tempo de Confirmação de Chuva
-          description: Segundos para confirmar que está realmente chovendo antes de fechar
+          description: Segundos para confirmar chuva antes de fechar
           default: 3
           selector:
             number:
@@ -103,14 +100,14 @@ blueprint:
         
         send_notification:
           name: Enviar Notificações
-          description: Notificar quando cobertura for fechada/aberta automaticamente
+          description: Notificar quando cobertura for fechada ou aberta
           default: false
           selector:
             boolean:
         
         notification_service:
           name: Serviço de Notificação
-          description: Digite o serviço de notificação desejado
+          description: Digite o serviço notify.mobile_app_nome ou notify.notify
           default: "notify.notify"
           selector:
             text:
@@ -125,13 +122,11 @@ variables:
   cover_entity: !input cover_entity
 
 triggers:
-  # Trigger 1: Chuva detectada
   - platform: state
     id: rain_detected
     entity_id: !input rain_sensor
     to: "on"
   
-  # Trigger 2: Chuva parou (com delay)
   - platform: state
     id: rain_stopped
     entity_id: !input rain_sensor
@@ -143,21 +138,17 @@ conditions: []
 
 actions:
   - choose:
-      # ======== CENÁRIO 1: CHUVA DETECTADA - FECHAR ========
       - conditions:
           - condition: trigger
             id: rain_detected
         sequence:
-          # Aguarda confirmação (evita falsos positivos)
           - delay:
               seconds: !input rain_confirmation_delay
           
-          # Verifica se ainda está chovendo após delay
           - condition: state
             entity_id: !input rain_sensor
             state: "on"
           
-          # Verifica se cobertura está aberta (usando sensor de posição se disponível)
           - choose:
               - conditions:
                   - condition: template
@@ -172,12 +163,10 @@ actions:
                   {{ is_state(cover_entity, 'open') or 
                      is_state(cover_entity, 'opening') }}
           
-          # Fecha a cobertura
           - service: cover.close_cover
             target:
               entity_id: !input cover_entity
           
-          # Notificação (se habilitada)
           - choose:
               - conditions:
                   - condition: template
@@ -188,14 +177,12 @@ actions:
                       title: "🌧️ Cobertura Fechada"
                       message: "Chuva detectada! Cobertura fechada automaticamente às {{ now().strftime('%H:%M') }}"
       
-      # ======== CENÁRIO 2: CHUVA PAROU - REABRIR (SE HABILITADO) ========
       - conditions:
           - condition: trigger
             id: rain_stopped
           - condition: template
             value_template: "{{ enable_auto_reopen }}"
         sequence:
-          # Verifica luminosidade (se sensor configurado)
           - choose:
               - conditions:
                   - condition: template
@@ -205,7 +192,6 @@ actions:
                     entity_id: !input lux_sensor
                     above: !input min_lux
           
-          # Verifica se cobertura está fechada (usando sensor de posição se disponível)
           - choose:
               - conditions:
                   - condition: template
@@ -220,12 +206,10 @@ actions:
                   {{ is_state(cover_entity, 'closed') or 
                      is_state(cover_entity, 'closing') }}
           
-          # Abre a cobertura
           - service: cover.open_cover
             target:
               entity_id: !input cover_entity
           
-          # Notificação (se habilitada)
           - choose:
               - conditions:
                   - condition: template
