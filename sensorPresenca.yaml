@@ -9,13 +9,13 @@ blueprint:
           domain: binary_sensor
 
     luzes:
-      name: Luzes/Switches que serão controlados
+      name: Luzes/Switches que serão controladas
       selector:
-        target:
-          entity:
-            domain:
-              - light
-              - switch
+        entity:
+          multiple: true
+          domain:
+            - light
+            - switch
 
     tempo_ausencia:
       name: Tempo sem presença para desligar
@@ -46,7 +46,8 @@ action:
             state: "on"
         sequence:
           - service: homeassistant.turn_on
-            target: !input luzes
+            target:
+              entity_id: !input luzes
 
       # REGRA 2 — Após X segundos sem presença → DESLIGAR se estiver ligada
       - conditions:
@@ -54,8 +55,9 @@ action:
             entity_id: !input sensor_presenca
             state: "off"
           - condition: state
-            target: !input luzes
+            entity_id: !input luzes
             state: "on"
         sequence:
           - service: homeassistant.turn_off
-            target: !input luzes
+            target:
+              entity_id: !input luzes
