@@ -1,12 +1,32 @@
 blueprint:
-  name: Sensor de Presença
+  name: Sensor de Presença com Luminosidade
   domain: automation
+
   input:
+
     sensor_presenca:
       name: Sensor de presença
       selector:
         entity:
           domain: binary_sensor
+
+    sensor_luminosidade:
+      name: Sensor de luminosidade (opcional)
+      description: Se deixar vazio, ignora luminosidade
+      default: ""
+      selector:
+        entity:
+          domain: sensor
+
+    limite_lux:
+      name: Não ligar se a luminosidade estiver acima de
+      description: Só usado se o sensor for informado
+      default: 30
+      selector:
+        number:
+          min: 0
+          max: 3000
+          unit_of_measurement: lx
 
     luzes:
       name: Luzes/Switches que serão controladas
@@ -26,6 +46,7 @@ blueprint:
           max: 1800
           unit_of_measurement: seconds
 
+
 trigger:
   - platform: state
     entity_id: !input sensor_presenca
@@ -36,20 +57,35 @@ trigger:
     to: "off"
     for: !input tempo_ausencia
 
+
 action:
   - choose:
 
-      # REGRA 1 — Presença → LIGAR imediatamente
+      # -------------------------------------------------------
+      # REGRA 1 — Presença -> LIGAR (respeitando luminosidade opcional)
+      # -------------------------------------------------------
       - conditions:
           - condition: state
             entity_id: !input sensor_presenca
             state: "on"
+
+          # Verifica luminosidade SOMENTE se um sensor tiver sido informado
+          - condition: template
+            value_template: >
+              {% set lux_sensor = (inputs.sensor_luminosidade | default('')) %}
+              {% if lux_sensor == '' %}
+                true   # Nenhum sensor informado → ignora luminosidade
+              {% else %}
+                states(lux_sensor) | float(0) < inputs.limite_lux
+              {% endif %}
         sequence:
           - service: homeassistant.turn_on
             target:
               entity_id: !input luzes
 
-      # REGRA 2 — Após X segundos sem presença → DESLIGAR se estiver ligada
+      # -------------------------------------------------------
+      # REGRA 2 — Após ausência → DESLIGAR
+      # -------------------------------------------------------
       - conditions:
           - condition: state
             entity_id: !input sensor_presenca
