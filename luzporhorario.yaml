@@ -1,25 +1,26 @@
 blueprint:
   name: Luz com Horário
   description: >
-    Liga luz por horário, presença e luminosidade.
-    - Liga no horário principal se luminosidade estiver abaixo do limite (opcional)
+    Automação completa com horário, presença opcional e luminosidade opcional.
+    - Liga no horário inicial (com ou sem lux)
     - Desliga no horário final
-    - Fora do horário principal: liga somente por presença
-    - Após pôr do sol: presença NÃO liga mais
-    - Desliga por ausência depois do tempo configurado.
+    - Fora do horário liga por presença (se existir sensor)
+    - Após pôr do sol, presença não liga mais
+    - Desliga por ausência (se existir sensor)
   domain: automation
 
   input:
 
     luzes:
-      name: Luz(s) / Switch(s)
+      name: Luz(es) ou Switch(es)
       selector:
         target:
           entity:
             domain: [light, switch]
 
     sensor_presenca:
-      name: Sensor de presença
+      name: Sensor de presença (opcional)
+      default: ""
       selector:
         entity:
           domain: binary_sensor
@@ -33,7 +34,6 @@ blueprint:
 
     limite_lux:
       name: Limiar de luminosidade para ligar (opcional)
-      description: Se vazio, a luminosidade não será usada.
       default: 20
       selector:
         number:
@@ -48,7 +48,7 @@ blueprint:
         boolean:
 
     tempo_ausencia:
-      name: Tempo sem presença para desligar
+      name: Tempo sem presença para desligar (se houver sensor)
       selector:
         number:
           min: 1
@@ -57,25 +57,25 @@ blueprint:
       default: 180
 
     horario_inicio:
-      name: Horário inicial
+      name: Horário para ligar
       default: "18:00:00"
       selector:
         time:
 
     horario_fim:
-      name: Horário final
+      name: Horário para desligar
       default: "00:00:00"
       selector:
         time:
 
 trigger:
 
-  # Presença detectada
+  # Presença detectada (somente se houver sensor)
   - platform: state
     entity_id: !input sensor_presenca
     to: "on"
 
-  # Ausência por tempo configurado
+  # Ausência pelo tempo configurado (somente se houver sensor)
   - platform: state
     entity_id: !input sensor_presenca
     to: "off"
@@ -91,15 +91,16 @@ trigger:
     at: !input horario_fim
 
 variables:
+  sensor_presenca: !input sensor_presenca
+  sensor_lux: !input sensor_lux
   usar_lux: !input usar_lux_no_horario
-  lux_sensor: !input sensor_lux
-  lux_limite: !input limite_lux
+  limite_lux: !input limite_lux
 
 action:
   - choose:
 
       ###################################################################
-      # 1 — HORÁRIO PRINCIPAL (liga no horário, com lux opcional)
+      # 1 — LIGAR NO HORÁRIO (com luminosidade opcional)
       ###################################################################
       - conditions:
           - condition: time
@@ -110,13 +111,13 @@ action:
                   - condition: template
                     value_template: >
                       {{ not usar_lux or
-                         (states(lux_sensor) | float(9999) < lux_limite) }}
+                         (sensor_lux != "" and (states(sensor_lux) | float(9999) < limite_lux)) }}
                 sequence:
                   - service: homeassistant.turn_on
                     target: !input luzes
 
       ###################################################################
-      # 2 — HORÁRIO FINAL (sempre desliga)
+      # 2 — DESLIGAR NO HORÁRIO FINAL
       ###################################################################
       - conditions:
           - condition: time
@@ -126,28 +127,32 @@ action:
             target: !input luzes
 
       ###################################################################
-      # 3 — PRESENÇA FORA DO HORÁRIO PRINCIPAL
+      # 3 — LIGAR POR PRESENÇA FORA DO HORÁRIO (somente se houver sensor)
       ###################################################################
       - conditions:
+          - condition: template
+            value_template: "{{ sensor_presenca != '' }}"
           - condition: state
             entity_id: !input sensor_presenca
             state: "on"
-          - condition: template
-            value_template: >
-              {% set inicio = states('input_datetime.horario_inicio') %}
-              {% set fim = states('input_datetime.horario_fim') %}
-              {{ not (inicio <= now().strftime('%H:%M:%S') <= fim) }}
           - condition: sun
             after: sunrise
             before: sunset
+          - condition: template
+            value_template: >
+              {% set inicio = (inputs.horario_inicio | string) %}
+              {% set fim = (inputs.horario_fim | string) %}
+              {{ not (inicio <= now().strftime('%H:%M:%S') <= fim) }}
         sequence:
           - service: homeassistant.turn_on
             target: !input luzes
 
       ###################################################################
-      # 4 — DESLIGAMENTO POR AUSÊNCIA (somente se luz estiver ligada)
+      # 4 — DESLIGAR POR AUSÊNCIA (somente se houver sensor)
       ###################################################################
       - conditions:
+          - condition: template
+            value_template: "{{ sensor_presenca != '' }}"
           - condition: state
             entity_id: !input sensor_presenca
             state: "off"
