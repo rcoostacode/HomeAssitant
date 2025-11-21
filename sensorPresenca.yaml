@@ -70,15 +70,11 @@ action:
 
           - condition: template
             value_template: >
-              {% set lux_entity = ( !input sensor_luminosidade ) %}
-              
-              {# Se o usuário NÃO selecionou nenhum sensor --> sempre liga #}
-              {% if lux_entity in ['', None] %}
+              {# Se usuário NÃO selecionou sensor de luminosidade → sempre liga #}
+              {% if !input sensor_luminosidade in ['', None] %}
                 true
-              
-              {# Se existe sensor --> comparar valor #}
               {% else %}
-                {{ states(lux_entity) | float(0) < ( !input limite_lux ) }}
+                {{ states(!input sensor_luminosidade) | float(0) < (!input limite_lux) }}
               {% endif %}
         sequence:
           - service: homeassistant.turn_on
