@@ -12,7 +12,7 @@ blueprint:
 
     sensor_luminosidade:
       name: Sensor de luminosidade (opcional)
-      description: Se deixar vazio, ignora luminosidade
+      description: Se deixar vazio, a automação ignora a luminosidade
       default: ""
       selector:
         entity:
@@ -20,7 +20,6 @@ blueprint:
 
     limite_lux:
       name: Não ligar se a luminosidade estiver acima de
-      description: Só usado se o sensor for informado
       default: 30
       selector:
         number:
@@ -62,21 +61,21 @@ action:
   - choose:
 
       # -------------------------------------------------------
-      # REGRA 1 — Presença -> LIGAR (respeitando luminosidade opcional)
+      # REGRA 1 — Presença → Ligar (respeitando luminosidade opcional)
       # -------------------------------------------------------
       - conditions:
           - condition: state
             entity_id: !input sensor_presenca
             state: "on"
 
-          # Verifica luminosidade SOMENTE se um sensor tiver sido informado
+          # Verificar luminosidade SOMENTE se sensor for informado
           - condition: template
             value_template: >
-              {% set lux_sensor = (inputs.sensor_luminosidade | default('')) %}
+              {% set lux_sensor = '!input sensor_luminosidade' %}
               {% if lux_sensor == '' %}
-                true   # Nenhum sensor informado → ignora luminosidade
+                true
               {% else %}
-                states(lux_sensor) | float(0) < inputs.limite_lux
+                {{ states(lux_sensor) | float(0) < (!input limite_lux) }}
               {% endif %}
         sequence:
           - service: homeassistant.turn_on
