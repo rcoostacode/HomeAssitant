@@ -1,8 +1,8 @@
 blueprint:
   name: Sensor de Presença com Bloqueio pelo Interruptor
   description: >
-    Liga a luz ao detectar presença e desliga após tempo sem presença.
-    Se a luz for desligada manualmente (estado OFF), o sensor não religa.
+    Liga a luz ou switch quando detectar presença e desliga após X minutos sem presença.
+    Se o usuário desligar manualmente, o sensor não religa.
   domain: automation
 
   input:
@@ -13,7 +13,7 @@ blueprint:
           domain: binary_sensor
           device_class: occupancy
 
-    target_light:
+    target_entity:
       name: Luz ou Interruptor
       selector:
         entity:
@@ -22,64 +22,42 @@ blueprint:
             - switch
 
     timeout:
-      name: Minutos sem presença para desligar
+      name: Minutos sem presença
       default: 3
       selector:
         number:
           min: 1
-          max: 30
+          max: 60
           unit_of_measurement: minutes
 
 mode: restart
-max_exceeded: silent
-
-variables:
-  motion_sensor: !input motion_sensor
-  target: !input target_light
-  timeout: !input timeout
 
 trigger:
   - platform: state
     entity_id: !input motion_sensor
-    from: "off"
-    to: "on"
 
-  - platform: state
-    entity_id: !input motion_sensor
-    from: "on"
-    to: "off"
+variables:
+  target: !input target_entity
+  motion: !input motion_sensor
+  timeout: !input timeout
 
 action:
   - choose:
-      # ===== PRESENÇA DETECTADA =====
+      # ======= SENSOR DETECTA PRESENÇA =======
       - conditions:
           - condition: state
             entity_id: !input motion_sensor
             state: "on"
           - condition: state
-            entity_id: !input target_light
+            entity_id: !input target_entity
             state: "off"
         sequence:
-          # Se for LIGHT
-          - choose:
-              - conditions:
-                  - condition: template
-                    value_template: "{{ target.startswith('light.') }}"
-                sequence:
-                  - service: light.turn_on
-                    target:
-                      entity_id: !input target_light
+          - service: >
+              homeassistant.turn_on
+            target:
+              entity_id: !input target_entity
 
-              # Se for SWITCH
-              - conditions:
-                  - condition: template
-                    value_template: "{{ target.startswith('switch.') }}"
-                sequence:
-                  - service: switch.turn_on
-                    target:
-                      entity_id: !input target_light
-
-      # ===== SEM PRESENÇA =====
+      # ======= SENSOR FICA SEM PRESENÇA =======
       - conditions:
           - condition: state
             entity_id: !input motion_sensor
@@ -90,22 +68,7 @@ action:
           - condition: state
             entity_id: !input motion_sensor
             state: "off"
-
-          # Desligar LIGHT
-          - choose:
-              - conditions:
-                  - condition: template
-                    value_template: "{{ target.startswith('light.') }}"
-                sequence:
-                  - service: light.turn_off
-                    target:
-                      entity_id: !input target_light
-
-              # Desligar SWITCH
-              - conditions:
-                  - condition: template
-                    value_template: "{{ target.startswith('switch.') }}"
-                sequence:
-                  - service: switch.turn_off
-                    target:
-                      entity_id: !input target_light
+          - service: >
+              homeassistant.turn_off
+            target:
+              entity_id: !input target_entity
