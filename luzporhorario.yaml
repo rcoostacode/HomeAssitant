@@ -1,5 +1,5 @@
 blueprint:
-  name: Luz com Horário (opção 2 - triggers só horário, sensores opcionais)
+  name: Luz com Horário
   description: >
     Automação completa com horário, presença opcional e luminosidade opcional.
     - Liga no horário inicial (com ou sem lux)
