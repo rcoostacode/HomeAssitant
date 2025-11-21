@@ -103,25 +103,23 @@ action:
       # 1 — LIGAR NO HORÁRIO (com luminosidade opcional)
       ###################################################################
       - conditions:
-          - condition: time
-            at: !input horario_inicio
+          - condition: template
+            value_template: >
+              {{ not usar_lux or
+                 (sensor_lux != "" and (states(sensor_lux) | float(9999) < limite_lux)) }}
         sequence:
-          - choose:
-              - conditions:
-                  - condition: template
-                    value_template: >
-                      {{ not usar_lux or
-                         (sensor_lux != "" and (states(sensor_lux) | float(9999) < limite_lux)) }}
-                sequence:
-                  - service: homeassistant.turn_on
-                    target: !input luzes
+          - service: homeassistant.turn_on
+            target: !input luzes
 
       ###################################################################
       # 2 — DESLIGAR NO HORÁRIO FINAL
       ###################################################################
       - conditions:
-          - condition: time
-            at: !input horario_fim
+          # Nenhuma condição necessária porque o trigger já é horário exato
+          # Pode remover condição time com 'at'
+          # Se quiser, pode deixar vazio ou só 'true'
+          - condition: template
+            value_template: "true"
         sequence:
           - service: homeassistant.turn_off
             target: !input luzes
