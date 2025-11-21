@@ -1,0 +1,75 @@
+blueprint:
+  name: Sensor de Presença com Bloqueio pelo Interruptor
+  description: >
+    Liga a luz ao detectar presença e desliga após tempo sem presença.
+    Se a luz for desligada manualmente (estado OFF), o sensor não religa.
+  domain: automation
+  input:
+    motion_sensor:
+      name: Sensor de presença
+      selector:
+        entity:
+          domain: binary_sensor
+          device_class: occupancy
+    target_light:
+      name: Luz
+      selector:
+        entity:
+          domain: light
+    timeout:
+      name: Minutos sem presença para desligar
+      default: 3
+      selector:
+        number:
+          min: 1
+          max: 30
+          unit_of_measurement: minutes
+
+mode: restart
+max_exceeded: silent
+
+variables:
+  motion_sensor: !input motion_sensor
+  target_light: !input target_light
+  timeout: !input timeout
+
+trigger:
+  - platform: state
+    entity_id: !input motion_sensor
+    from: "off"
+    to: "on"
+
+  - platform: state
+    entity_id: !input motion_sensor
+    from: "on"
+    to: "off"
+
+condition: []
+
+action:
+  - choose:
+      # ===== Quando detectar presença =====
+      - conditions:
+          - condition: trigger
+            id: motion_detected
+          - condition: state
+            entity_id: !input target_light
+            state: "off"    # Só liga se estiver realmente desligada
+        sequence:
+          - service: light.turn_on
+            target:
+              entity_id: !input target_light
+
+      # ===== Quando ficar sem presença =====
+      - conditions:
+          - condition: trigger
+            id: no_motion
+        sequence:
+          - delay:
+              minutes: !input timeout
+          - condition: state
+            entity_id: !input motion_sensor
+            state: "off"
+          - service: light.turn_off
+            target:
+              entity_id: !input target_light
