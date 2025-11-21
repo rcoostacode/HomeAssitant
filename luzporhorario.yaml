@@ -70,16 +70,7 @@ blueprint:
 
 trigger:
 
-  - platform: state
-    entity_id: !input sensor_presenca
-    to: "on"
-
-  - platform: state
-    entity_id: !input sensor_presenca
-    to: "off"
-    for:
-      seconds: !input tempo_ausencia
-
+  # Apenas triggers de horário
   - platform: time
     at: !input horario_inicio
 
