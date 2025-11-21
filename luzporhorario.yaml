@@ -1,5 +1,5 @@
 blueprint:
-  name: Luz com Horário (com flags para sensores opcionais)
+  name: Luz com Horário (opção 2 - triggers só horário, sensores opcionais)
   description: >
     Automação completa com horário, presença opcional e luminosidade opcional.
     - Liga no horário inicial (com ou sem lux)
@@ -75,18 +75,7 @@ blueprint:
         time:
 
 trigger:
-  # Triggers de presença (sempre presentes para evitar erro)
-  - platform: state
-    entity_id: !input sensor_presenca
-    to: "on"
-
-  - platform: state
-    entity_id: !input sensor_presenca
-    to: "off"
-    for:
-      seconds: !input tempo_ausencia
-
-  # Triggers de horário
+  # Triggers apenas no horário para evitar erro se sensor for vazio
   - platform: time
     at: !input horario_inicio
 
@@ -100,6 +89,7 @@ variables:
   usar_sensor_lux: !input usar_sensor_lux
   limite_lux: !input limite_lux
   luzes: !input luzes
+  tempo_ausencia: !input tempo_ausencia
 
 action:
   - choose:
