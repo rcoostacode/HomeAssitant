@@ -1,9 +1,9 @@
 blueprint:
-  name: Chuva e Luminosidade
+  name: Sensor Chuva, Lux, Previsão
   description: |
     Fecha cobertura automaticamente quando detectar chuva.
-    Opcionalmente reabre após a chuva baseado em luminosidade e tempo de espera.
-    Suporta sensor de posição para maior precisão.
+    Reabre apenas se não estiver chovendo, com base em luminosidade e/ou temperatura da previsão.
+    Suporta sensor de posição e notificações.
   domain: automation
 
   input:
@@ -23,6 +23,15 @@ blueprint:
           filter:
             - domain: cover
 
+    weather_entity:
+      name: Entidade de Previsão do Tempo
+      description: Entidade weather.* usada para checar condição e temperatura prevista
+      default: weather.home
+      selector:
+        entity:
+          filter:
+            - domain: weather
+
     auto_reopen_section:
       name: Reabertura Automática
       icon: mdi:weather-sunny
@@ -35,17 +44,6 @@ blueprint:
           default: false
           selector:
             boolean:
-
-        reopen_delay:
-          name: Tempo de Espera após Chuva
-          description: Minutos para aguardar após chuva parar antes de reabrir
-          default: 10
-          selector:
-            number:
-              min: 0
-              max: 120
-              unit_of_measurement: minutes
-              step: 5
 
         lux_sensor:
           name: Sensor de Luminosidade (Opcional)
@@ -68,6 +66,17 @@ blueprint:
               unit_of_measurement: lux
               step: 100
 
+        min_forecast_temp:
+          name: Temperatura Mínima da Previsão para Abrir
+          description: Só abre se a temperatura da entidade weather for maior ou igual a este valor
+          default: 22
+          selector:
+            number:
+              min: -10
+              max: 50
+              unit_of_measurement: °C
+              step: 1
+
     position_section:
       name: Sensor de Posição
       icon: mdi:arrow-expand-vertical
@@ -76,7 +85,7 @@ blueprint:
       input:
         position_sensor:
           name: Sensor de Posição (Opcional)
-          description: Sensor binário que indica se cobertura está aberta
+          description: Sensor binário que indica se cobertura está aberta (on) ou fechada (off)
           default: {}
           selector:
             entity:
@@ -122,6 +131,8 @@ variables:
   send_notification: !input send_notification
   notification_service: !input notification_service
   cover_entity: !input cover_entity
+  weather_entity: !input weather_entity
+  min_forecast_temp: !input min_forecast_temp
 
 triggers:
   - platform: state
@@ -133,8 +144,6 @@ triggers:
     id: rain_stopped
     entity_id: !input rain_sensor
     to: "off"
-    for:
-      minutes: !input reopen_delay
 
 conditions: []
 
@@ -192,7 +201,24 @@ actions:
           - condition: template
             value_template: "{{ enable_auto_reopen }}"
         sequence:
-          # Verifica luminosidade (se sensor configurado e min_lux > 0)
+          # Garante que o sensor de chuva físico está seco
+          - condition: state
+            entity_id: !input rain_sensor
+            state: "off"
+
+          # Garante que condição atual do weather não é de chuva
+          - condition: template
+            value_template: >
+              {% set cond = state_attr(weather_entity, 'condition') %}
+              {{ cond not in ['rain', 'pouring', 'lightning', 'lightning-rainy', 'snow', 'hail'] }}
+
+          # Verifica temperatura prevista da entidade weather.*
+          - condition: template
+            value_template: >
+              {% set temp = state_attr(weather_entity, 'temperature') %}
+              {{ temp is number and temp >= min_forecast_temp }}
+
+          # Verifica luminosidade (se configurada e min_lux > 0)
           - choose:
               - conditions:
                   - condition: template
@@ -232,9 +258,13 @@ actions:
                     data:
                       title: "Cobertura Aberta após Chuva"
                       message: >
-                        Chuva parou. Cobertura reaberta automaticamente às {{ now().strftime('%H:%M') }}.
+                        Cobertura reaberta automaticamente às {{ now().strftime('%H:%M') }}.
+                        {% set temp = state_attr(weather_entity, 'temperature') %}
+                        {% if temp is number %}
+                        Temperatura previsão: {{ temp }} °C.
+                        {% endif %}
                         {% if lux_sensor != {} %}
-                        Luminosidade atual: {{ states(lux_sensor) }} lux.
+                        Luminosidade: {{ states(lux_sensor) }} lux.
                         {% endif %}
 
 mode: restart
