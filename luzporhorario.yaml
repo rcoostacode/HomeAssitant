@@ -69,8 +69,7 @@ blueprint:
         time:
 
 trigger:
-
-  # Apenas triggers de horário
+  # Triggers só de horário para evitar erros com sensores opcionais
   - platform: time
     at: !input horario_inicio
 
@@ -105,11 +104,11 @@ action:
           - service: homeassistant.turn_off
             target: !input luzes
 
-      # 3 — LIGAR POR PRESENÇA FORA DO HORÁRIO (somente se houver sensor)
+      # 3 — LIGAR POR PRESENÇA FORA DO HORÁRIO (se sensor existir)
       - conditions:
           - condition: template
             value_template: >
-              {{ sensor_presenca != '' and
+              {{ sensor_presenca != "" and
                  is_state(sensor_presenca, 'on') and
                  is_state('sun.sun', 'above_horizon') and
                  not (inputs.horario_inicio <= now().strftime('%H:%M:%S') <= inputs.horario_fim)
@@ -118,11 +117,11 @@ action:
           - service: homeassistant.turn_on
             target: !input luzes
 
-      # 4 — DESLIGAR POR AUSÊNCIA (somente se houver sensor)
+      # 4 — DESLIGAR POR AUSÊNCIA (se sensor existir)
       - conditions:
           - condition: template
             value_template: >
-              {{ sensor_presenca != '' and
+              {{ sensor_presenca != "" and
                  is_state(sensor_presenca, 'off') and
                  (expand(luzes) | selectattr('state', 'eq', 'on') | list | count > 0)
               }}
