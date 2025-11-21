@@ -1,74 +1,59 @@
 blueprint:
-  name: Sensor de Presença com Bloqueio pelo Interruptor
-  description: >
-    Liga a luz ou switch quando detectar presença e desliga após X minutos sem presença.
-    Se o usuário desligar manualmente, o sensor não religa.
+  name: Presença liga luz e ausência desliga após 3 min
   domain: automation
-
   input:
-    motion_sensor:
+    sensor_presenca:
       name: Sensor de presença
       selector:
         entity:
           domain: binary_sensor
-          device_class: occupancy
-
-    target_entity:
-      name: Luz ou Interruptor
+    luz:
+      name: Luz/switch que será controlado
       selector:
         entity:
           domain:
             - light
             - switch
-
-    timeout:
-      name: Minutos sem presença
-      default: 3
+    tempo_ausencia:
+      name: Tempo sem presença para desligar
+      default: 180
       selector:
         number:
-          min: 1
-          max: 60
-          unit_of_measurement: minutes
-
-mode: restart
+          min: 10
+          max: 1800
+          unit_of_measurement: seconds
 
 trigger:
   - platform: state
-    entity_id: !input motion_sensor
-
-variables:
-  target: !input target_entity
-  motion: !input motion_sensor
-  timeout: !input timeout
+    entity_id: !input sensor_presenca
+    to: "on"
+  - platform: state
+    entity_id: !input sensor_presenca
+    to: "off"
+    for: !input tempo_ausencia
 
 action:
   - choose:
-      # ======= SENSOR DETECTA PRESENÇA =======
-      - conditions:
-          - condition: state
-            entity_id: !input motion_sensor
-            state: "on"
-          - condition: state
-            entity_id: !input target_entity
-            state: "off"
-        sequence:
-          - service: >
-              homeassistant.turn_on
-            target:
-              entity_id: !input target_entity
 
-      # ======= SENSOR FICA SEM PRESENÇA =======
+      # REGRA 1: Presença -> ligar a luz imediatamente
       - conditions:
           - condition: state
-            entity_id: !input motion_sensor
-            state: "off"
+            entity_id: !input sensor_presenca
+            state: "on"
         sequence:
-          - delay:
-              minutes: !input timeout
-          - condition: state
-            entity_id: !input motion_sensor
-            state: "off"
-          - service: >
-              homeassistant.turn_off
+          - service: homeassistant.turn_on
             target:
-              entity_id: !input target_entity
+              entity_id: !input luz
+
+      # REGRA 2: Ausência por X segundos -> desliga a luz SE a luz estiver ligada
+      - conditions:
+          - condition: state
+            entity_id: !input sensor_presenca
+            state: "off"
+          - condition: state
+            entity_id: !input luz
+            state: "on"
+        sequence:
+          - service: homeassistant.turn_off
+            target:
+              entity_id: !input luz
