@@ -12,10 +12,12 @@ blueprint:
           domain: binary_sensor
           device_class: occupancy
     target_light:
-      name: Luz
+      name: Luz ou Interruptor
       selector:
         entity:
-          domain: light
+          domain:
+            - light
+            - switch
     timeout:
       name: Minutos sem presença para desligar
       default: 3
@@ -56,7 +58,10 @@ action:
             entity_id: !input target_light
             state: "off"    # Só liga se estiver realmente desligada
         sequence:
-          - service: light.turn_on
+          - service: >
+              {% if is_state(target_light, 'off') %}
+              {{ 'light.turn_on' if target_light.startswith('light.') else 'switch.turn_on' }}
+              {% endif %}
             target:
               entity_id: !input target_light
 
@@ -70,6 +75,7 @@ action:
           - condition: state
             entity_id: !input motion_sensor
             state: "off"
-          - service: light.turn_off
+          - service: >
+              {{ 'light.turn_off' if target_light.startswith('light.') else 'switch.turn_off' }}
             target:
               entity_id: !input target_light
