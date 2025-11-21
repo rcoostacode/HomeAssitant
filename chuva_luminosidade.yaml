@@ -1,0 +1,242 @@
+blueprint:
+  name: Sensor de Chuva e Luminosidade
+  description: |
+    Fecha cobertura automaticamente quando detectar chuva.
+    Opcionalmente reabre após a chuva baseado em luminosidade e tempo de espera.
+    Suporta sensor de posição para maior precisão.
+  domain: automation
+  input:
+    rain_sensor:
+      name: Sensor de Chuva
+      description: Sensor que detecta quando está chovendo
+      selector:
+        entity:
+          filter:
+            - domain: binary_sensor
+    
+    cover_entity:
+      name: Cobertura
+      description: Cobertura a ser controlada
+      selector:
+        entity:
+          filter:
+            - domain: cover
+    
+    # OPCIONAIS - Reabertura Automática
+    auto_reopen_section:
+      name: Reabertura Automática
+      icon: mdi:weather-sunny
+      description: Configurações para reabrir automaticamente após a chuva
+      collapsed: true
+      input:
+        enable_auto_reopen:
+          name: Habilitar Reabertura Automática
+          description: Reabrir cobertura automaticamente após chuva parar
+          default: false
+          selector:
+            boolean:
+        
+        reopen_delay:
+          name: Tempo de Espera após Chuva
+          description: Minutos para aguardar após chuva parar antes de reabrir
+          default: 10
+          selector:
+            number:
+              min: 0
+              max: 120
+              unit_of_measurement: minutes
+              step: 5
+        
+        lux_sensor:
+          name: Sensor de Luminosidade (Opcional)
+          description: Só reabre se luminosidade estiver acima do valor definido
+          default: {}
+          selector:
+            entity:
+              filter:
+                - domain: sensor
+                  device_class: illuminance
+        
+        min_lux:
+          name: Luminosidade Mínima para Reabrir
+          description: Valor mínimo de lux necessário para reabrir (0 = desabilita verificação)
+          default: 0
+          selector:
+            number:
+              min: 0
+              max: 50000
+              unit_of_measurement: lux
+              step: 100
+    
+    # OPCIONAIS - Sensor de Posição
+    position_section:
+      name: Sensor de Posição
+      icon: mdi:arrow-expand-vertical
+      description: Sensor adicional para verificar estado real da cobertura
+      collapsed: true
+      input:
+        position_sensor:
+          name: Sensor de Posição Aberto/Fechado (Opcional)
+          description: Sensor binário que indica se cobertura está aberta
+          default: {}
+          selector:
+            entity:
+              filter:
+                - domain: binary_sensor
+    
+    # OPCIONAIS - Comportamento Avançado
+    advanced_section:
+      name: Configurações Avançadas
+      icon: mdi:cog
+      collapsed: true
+      input:
+        rain_confirmation_delay:
+          name: Tempo de Confirmação de Chuva
+          description: Segundos para confirmar que está realmente chovendo antes de fechar
+          default: 3
+          selector:
+            number:
+              min: 0
+              max: 30
+              unit_of_measurement: seconds
+              step: 1
+        
+        send_notification:
+          name: Enviar Notificações
+          description: Notificar quando cobertura for fechada/aberta automaticamente
+          default: false
+          selector:
+            boolean:
+        
+        notification_service:
+          name: Serviço de Notificação
+          description: Serviço para enviar notificações (ex: notify.mobile_app_seu_celular)
+          default: notify.notify
+          selector:
+            text:
+
+variables:
+  enable_auto_reopen: !input enable_auto_reopen
+  lux_sensor: !input lux_sensor
+  min_lux: !input min_lux
+  position_sensor: !input position_sensor
+  send_notification: !input send_notification
+  notification_service: !input notification_service
+
+triggers:
+  # Trigger 1: Chuva detectada
+  - platform: state
+    id: rain_detected
+    entity_id: !input rain_sensor
+    to: "on"
+  
+  # Trigger 2: Chuva parou (com delay)
+  - platform: state
+    id: rain_stopped
+    entity_id: !input rain_sensor
+    to: "off"
+    for:
+      minutes: !input reopen_delay
+
+conditions: []
+
+actions:
+  - choose:
+      # ======== CENÁRIO 1: CHUVA DETECTADA - FECHAR ========
+      - conditions:
+          - condition: trigger
+            id: rain_detected
+        sequence:
+          # Aguarda confirmação (evita falsos positivos)
+          - delay:
+              seconds: !input rain_confirmation_delay
+          
+          # Verifica se ainda está chovendo após delay
+          - condition: state
+            entity_id: !input rain_sensor
+            state: "on"
+          
+          # Verifica se cobertura está aberta (usando sensor de posição se disponível)
+          - choose:
+              - conditions:
+                  - condition: template
+                    value_template: "{{ position_sensor != {} }}"
+                  - condition: state
+                    entity_id: !input position_sensor
+                    state: "on"
+                sequence: []
+            default:
+              - condition: template
+                value_template: >
+                  {{ is_state(cover_entity, 'open') or 
+                     is_state(cover_entity, 'opening') }}
+          
+          # Fecha a cobertura
+          - service: cover.close_cover
+            target:
+              entity_id: !input cover_entity
+          
+          # Notificação (se habilitada)
+          - choose:
+              - conditions:
+                  - condition: template
+                    value_template: "{{ send_notification }}"
+                sequence:
+                  - service: "{{ notification_service }}"
+                    data:
+                      title: "🌧️ Cobertura Fechada"
+                      message: "Chuva detectada! Cobertura fechada automaticamente às {{ now().strftime('%H:%M') }}"
+      
+      # ======== CENÁRIO 2: CHUVA PAROU - REABRIR (SE HABILITADO) ========
+      - conditions:
+          - condition: trigger
+            id: rain_stopped
+          - condition: template
+            value_template: "{{ enable_auto_reopen }}"
+        sequence:
+          # Verifica luminosidade (se sensor configurado)
+          - choose:
+              - conditions:
+                  - condition: template
+                    value_template: "{{ lux_sensor != {} and min_lux > 0 }}"
+                sequence:
+                  - condition: numeric_state
+                    entity_id: !input lux_sensor
+                    above: !input min_lux
+          
+          # Verifica se cobertura está fechada (usando sensor de posição se disponível)
+          - choose:
+              - conditions:
+                  - condition: template
+                    value_template: "{{ position_sensor != {} }}"
+                  - condition: state
+                    entity_id: !input position_sensor
+                    state: "off"
+                sequence: []
+            default:
+              - condition: template
+                value_template: >
+                  {{ is_state(cover_entity, 'closed') or 
+                     is_state(cover_entity, 'closing') }}
+          
+          # Abre a cobertura
+          - service: cover.open_cover
+            target:
+              entity_id: !input cover_entity
+          
+          # Notificação (se habilitada)
+          - choose:
+              - conditions:
+                  - condition: template
+                    value_template: "{{ send_notification }}"
+                sequence:
+                  - service: "{{ notification_service }}"
+                    data:
+                      title: "☀️ Cobertura Aberta"
+                      message: >
+                        Chuva parou! Cobertura reaberta automaticamente às {{ now().strftime('%H:%M') }}
+                        {% if lux_sensor != {} %}
+                        (Luminosidade: {{ states(lux_sensor) }} lux)
+                        {% endif %}
+
+mode: restart
