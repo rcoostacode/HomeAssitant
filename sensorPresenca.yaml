@@ -1,5 +1,5 @@
 blueprint:
-  name: Presença liga luz e ausência desliga após 3 min
+  name: Sensor de Presença
   domain: automation
   input:
     sensor_presenca:
