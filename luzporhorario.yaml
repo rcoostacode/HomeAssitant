@@ -115,9 +115,7 @@ action:
       # 2 — DESLIGAR NO HORÁRIO FINAL
       ###################################################################
       - conditions:
-          # Nenhuma condição necessária porque o trigger já é horário exato
-          # Pode remover condição time com 'at'
-          # Se quiser, pode deixar vazio ou só 'true'
+          # Condição simples, já que trigger é horário exato
           - condition: template
             value_template: "true"
         sequence:
@@ -129,18 +127,12 @@ action:
       ###################################################################
       - conditions:
           - condition: template
-            value_template: "{{ sensor_presenca != '' }}"
-          - condition: state
-            entity_id: !input sensor_presenca
-            state: "on"
-          - condition: sun
-            after: sunrise
-            before: sunset
-          - condition: template
             value_template: >
-              {% set inicio = (inputs.horario_inicio | string) %}
-              {% set fim = (inputs.horario_fim | string) %}
-              {{ not (inicio <= now().strftime('%H:%M:%S') <= fim) }}
+              {{ sensor_presenca != '' and
+                 is_state(sensor_presenca, 'on') and
+                 is_state('sun.sun', 'above_horizon') and
+                 not (inputs.horario_inicio <= now().strftime('%H:%M:%S') <= inputs.horario_fim)
+              }}
         sequence:
           - service: homeassistant.turn_on
             target: !input luzes
@@ -150,13 +142,15 @@ action:
       ###################################################################
       - conditions:
           - condition: template
-            value_template: "{{ sensor_presenca != '' }}"
-          - condition: state
-            entity_id: !input sensor_presenca
-            state: "off"
-          - condition: state
-            entity_id: !input luzes
-            state: "on"
+            value_template: >
+              {{ sensor_presenca != '' and
+                 is_state(sensor_presenca, 'off') and
+                 (luzes_acesas) 
+              }}
         sequence:
           - service: homeassistant.turn_off
             target: !input luzes
+
+variables:
+  luzes_acesas: >
+    {{ expand(luzes) | selectattr('state', 'eq', 'on') | list | count > 0 }}
