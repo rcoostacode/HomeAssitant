@@ -1,6 +1,6 @@
 blueprint:
-  name: Desliga Luzes por Presença e Dias
-  description: Desliga uma ou mais luzes quando não há presença, somente nos dias escolhidos da semana.
+  name: Desliga Luzes por Falta de Presença
+  description: Desliga uma ou mais luzes quando não há presença por um tempo.
   domain: automation
 
   input:
@@ -29,35 +29,6 @@ blueprint:
           unit_of_measurement: seconds
           mode: slider
 
-    active_days:
-      name: Dias da semana em que DESLIGA
-      description: Nesses dias a automação poderá desligar as luzes.
-      selector:
-        select:
-          multiple: true
-          mode: list
-          options:
-            - label: Segunda
-              value: mon
-            - label: Terça
-              value: tue
-            - label: Quarta
-              value: wed
-            - label: Quinta
-              value: thu
-            - label: Sexta
-              value: fri
-            - label: Sábado
-              value: sat
-            - label: Domingo
-              value: sun
-      default:
-        - mon
-        - tue
-        - wed
-        - thu
-        - fri
-
 mode: restart
 
 trigger:
@@ -67,11 +38,7 @@ trigger:
     for:
       seconds: !input no_motion_wait
 
-condition:
-  - condition: template
-    value_template: >
-      {% set days = !input active_days %}
-      {{ now().strftime('%a')[:3] | lower in days }}
+condition: []
 
 action:
   - service: light.turn_off
