@@ -1,6 +1,6 @@
 blueprint:
-  name: Desliga Luz Presença por Dias
-  description: Desliga a luz quando não há presença, somente nos dias escolhidos da semana.
+  name: Desliga Luzes por Presença e Dias
+  description: Desliga uma ou mais luzes quando não há presença, somente nos dias escolhidos da semana.
   domain: automation
 
   input:
@@ -10,11 +10,14 @@ blueprint:
         entity:
           domain: binary_sensor
 
-    target_light:
-      name: Luz a controlar
+    target_lights:
+      name: Luzes a controlar
       selector:
-        entity:
-          domain: light
+        target:
+          entity:
+            domain:
+              - light
+              - switch
 
     no_motion_wait:
       name: Tempo sem presença para desligar (segundos)
@@ -28,7 +31,7 @@ blueprint:
 
     active_days:
       name: Dias da semana em que DESLIGA
-      description: Nesses dias a automação poderá desligar a luz.
+      description: Nesses dias a automação poderá desligar as luzes.
       selector:
         select:
           multiple: true
@@ -72,5 +75,4 @@ condition:
 
 action:
   - service: light.turn_off
-    target:
-      entity_id: !input target_light
+    target: !input target_lights
