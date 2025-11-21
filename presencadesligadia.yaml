@@ -1,0 +1,62 @@
+blueprint:
+  name: Desliga Luz Presença por Dia
+  description: Desliga a luz quando não há presença, exceto em um dia da semana.
+  domain: automation
+
+  input:
+    motion_sensor:
+      name: Sensor de presença
+      selector:
+        entity:
+          domain: binary_sensor
+          device_class: motion
+
+    target_light:
+      name: Luz a controlar
+      selector:
+        entity:
+          domain: light
+
+    no_motion_wait:
+      name: Tempo sem presença para desligar
+      default: 300
+      selector:
+        number:
+          min: 5
+          max: 3600
+          unit_of_measurement: seconds
+          mode: slider
+
+    excluded_day:
+      name: Dia da semana em que NÃO desliga
+      description: Nesse dia a automação não irá desligar a luz.
+      default: "sun"
+      selector:
+        select:
+          options:
+            - "mon"
+            - "tue"
+            - "wed"
+            - "thu"
+            - "fri"
+            - "sat"
+            - "sun"
+
+mode: restart
+
+trigger:
+  - platform: state
+    entity_id: !input motion_sensor
+    to: "off"
+    for:
+      seconds: !input no_motion_wait
+
+condition:
+  - condition: template
+    value_template: >
+      {{ now().strftime('%a') | lower not in [!input excluded_day] }}
+
+action:
+  - service: light.turn_off
+    target:
+      entity_id: !input target_light
