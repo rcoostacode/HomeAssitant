@@ -25,7 +25,7 @@ blueprint:
 
     weather_entity:
       name: Entidade de Previsão do Tempo
-      description: Entidade weather.* usada para checar condição e temperatura
+      description: Entidade weather usada para checar condição e temperatura
       default: weather.home
       selector:
         entity:
@@ -47,7 +47,7 @@ blueprint:
 
         lux_sensor:
           name: Sensor de Luminosidade (Opcional)
-          description: Ex.: sensor.luminosidade_chuva_media_20min ou outro sensor de lux
+          description: Sensor de lux a ser usado na decisão de reabertura
           default: {}
           selector:
             entity:
@@ -56,7 +56,7 @@ blueprint:
 
         min_lux:
           name: Luminosidade Mínima para Reabrir
-          description: 0 desativa a verificação por lux
+          description: Valor mínimo de lux necessário para reabrir; 0 desativa essa verificação
           default: 0
           selector:
             number:
@@ -67,7 +67,7 @@ blueprint:
 
         min_forecast_temp:
           name: Temperatura Mínima para Reabrir
-          description: Usa a temperatura atual da entidade weather; só abre se for maior ou igual
+          description: Usa a temperatura atual da entidade de tempo; só abre se for maior ou igual ao valor definido
           default: 22
           selector:
             number:
@@ -84,7 +84,7 @@ blueprint:
       input:
         position_sensor:
           name: Sensor de Posição (Opcional)
-          description: Binary_sensor onde on = aberta e off = fechada
+          description: Binary_sensor onde on significa aberta e off significa fechada
           default: {}
           selector:
             entity:
@@ -117,7 +117,7 @@ blueprint:
 
         notification_service:
           name: Serviço de Notificação
-          description: Digite o serviço de notificação, como notify.notify ou notify.mobile_app_celular
+          description: Serviço de notificação, como notify.notify ou notify.mobile_app_celular
           default: "notify.notify"
           selector:
             text:
