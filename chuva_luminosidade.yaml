@@ -1,5 +1,5 @@
 blueprint:
-  name: Sensor de Chuva e Luminosidade
+  name: Sensor Chuva e Luminosidade
   description: |
     Fecha cobertura automaticamente quando detectar chuva.
     Opcionalmente reabre após a chuva baseado em luminosidade e tempo de espera.
@@ -110,8 +110,8 @@ blueprint:
         
         notification_service:
           name: Serviço de Notificação
-          description: Serviço para enviar notificações (ex: notify.mobile_app_seu_celular)
-          default: notify.notify
+          description: Digite o serviço de notificação desejado
+          default: "notify.notify"
           selector:
             text:
 
@@ -122,6 +122,7 @@ variables:
   position_sensor: !input position_sensor
   send_notification: !input send_notification
   notification_service: !input notification_service
+  cover_entity: !input cover_entity
 
 triggers:
   # Trigger 1: Chuva detectada
