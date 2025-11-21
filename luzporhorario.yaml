@@ -1,0 +1,112 @@
+blueprint:
+  name: Luz por Horário
+  description: Liga e desliga um dispositivo em horários definidos, com sensores opcionais de presença e luminosidade.
+  domain: automation
+
+  input:
+    target_entity:
+      name: Dispositivo
+      description: Luz ou switch que será controlado
+      selector:
+        entity:
+          domain:
+            - light
+            - switch
+
+    start_time:
+      name: Horário para ligar
+      selector:
+        time:
+      default: "18:00:00"
+
+    end_time:
+      name: Horário para desligar
+      selector:
+        time:
+      default: "00:00:00"
+
+    presence_sensor:
+      name: Sensor de Presença (opcional)
+      description: Se configurado, a luz só liga quando houver presença.
+      default: ""
+      selector:
+        entity:
+          domain: binary_sensor
+          device_class: motion
+
+    lux_sensor:
+      name: Sensor de Luminosidade (opcional)
+      description: Se configurado, a luz só liga se a luminosidade estiver abaixo do limite.
+      default: ""
+      selector:
+        entity:
+          domain: sensor
+          device_class: illuminance
+
+    lux_limit:
+      name: Limite de luminosidade
+      description: Só usado se o sensor de luminosidade for configurado.
+      default: 50
+      selector:
+        number:
+          min: 1
+          max: 2000
+          unit_of_measurement: lx
+          mode: slider
+
+trigger:
+  - platform: time
+    at: !input start_time
+  - platform: time
+    at: !input end_time
+
+variables:
+  presence: !input presence_sensor
+  lux_sensor: !input lux_sensor
+  lux_limit: !input lux_limit
+
+condition: []
+
+action:
+  - choose:
+
+      ###################################################################
+      # LIGAR NO HORÁRIO
+      ###################################################################
+      - conditions:
+          - condition: time
+            at: !input start_time
+
+          # Se sensor de presença foi configurado → exige presença
+          - condition: or
+            conditions:
+              - condition: template
+                value_template: "{{ presence == '' }}"
+              - condition: state
+                entity_id: !input presence_sensor
+                state: "on"
+
+          # Se sensor de luminosidade foi configurado → exige lux baixo
+          - condition: or
+            conditions:
+              - condition: template
+                value_template: "{{ lux_sensor == '' }}"
+              - condition: template
+                value_template: >
+                  {{ states(lux_sensor) | float(99999) < lux_limit }}
+
+        sequence:
+          - service: homeassistant.turn_on
+            target:
+              entity_id: !input target_entity
+
+      ###################################################################
+      # DESLIGAR NO HORÁRIO
+      ###################################################################
+      - conditions:
+          - condition: time
+            at: !input end_time
+        sequence:
+          - service: homeassistant.turn_off
+            target:
+              entity_id: !input target_entity
