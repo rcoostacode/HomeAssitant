@@ -1,0 +1,34 @@
+blueprint:
+  name: Remover Dispositivo Zigbee2MQTT
+  description: Remove (expulsa) um dispositivo da rede Zigbee2MQTT.
+  domain: script
+  input:
+    target_device:
+      name: Dispositivo
+      description: Selecione o dispositivo a ser removido.
+      selector:
+        device:
+          integration: mqtt
+    
+    force_remove:
+      name: Forçar Remoção?
+      description: Se ativado, remove o dispositivo mesmo que ele não responda (útil para dispositivos quebrados ou sem bateria).
+      default: false
+      selector:
+        boolean:
+
+variables:
+  device_var: !input target_device
+  force_var: !input force_remove
+  # Pega o nome amigável do dispositivo
+  device_name: "{{ device_attr(device_var, 'name') }}"
+
+sequence:
+  - service: mqtt.publish
+    data:
+      topic: "zigbee2mqtt/bridge/request/device/remove"
+      payload: >
+        {
+          "id": "{{ device_name }}",
+          "force": {{ force_var | to_json }}
+        }
