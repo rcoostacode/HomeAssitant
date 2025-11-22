@@ -1,24 +1,32 @@
 blueprint:
-  name: Resetar Dispositivo Zigbee (Automação)
+  name: Reset (Reconfigure) dispositivo Zigbee2MQTT
+  description: >
+    Envia comando de reconfigure para um dispositivo Zigbee2MQTT,
+    útil para corrigir falhas de comunicação sem remover o device.
   domain: automation
+
   input:
-    target_device:
-      name: Dispositivo
+    trigger_button:
+      name: Botão para acionar
+      description: Input_button, input_boolean, switch, etc.
       selector:
-        device:
-          integration: mqtt
+        entity: {}
 
-# Gatilho falso apenas para o HA parar de reclamar
+    z2m_device_name:
+      name: Nome do dispositivo no Zigbee2MQTT
+      description: Exatamente como aparece no Z2M (ex: "sala_lampada", "0x842e14fffec12a9b")
+      selector:
+        text: {}
+
 trigger:
-  - platform: template
-    value_template: "{{ false }}"
-
-variables:
-  device_var: !input target_device
-  device_name: "{{ device_attr(device_var, 'name') }}"
+  - platform: state
+    entity_id: !input trigger_button
 
 action:
   - service: mqtt.publish
     data:
-      topic: "zigbee2mqtt/{{ device_name }}/set"
-      payload: '{"reset": true}'
+      topic: zigbee2mqtt/bridge/request/device/reconfigure
+      payload: >
+        {"id":"{{ (z2m_device_name) }}"}
+
+mode: single
