@@ -1,22 +1,23 @@
 blueprint:
-  name: Resetar Dispositivo Zigbee (Modo Script)
-  description: Script manual para resetar dispositivos Zigbee2MQTT.
-  domain: script  # <--- Mudamos para script para não precisar de trigger
+  name: Resetar Dispositivo Zigbee (Automação)
+  domain: automation
   input:
     target_device:
       name: Dispositivo
-      description: Selecione o dispositivo.
       selector:
         device:
           integration: mqtt
 
+# Gatilho falso apenas para o HA parar de reclamar
+trigger:
+  - platform: template
+    value_template: "{{ false }}"
+
 variables:
-  # Captura o dispositivo selecionado
   device_var: !input target_device
-  # Captura o nome. Lembre-se: O nome no HA deve ser IGUAL ao do Zigbee2MQTT
   device_name: "{{ device_attr(device_var, 'name') }}"
 
-sequence:
+action:
   - service: mqtt.publish
     data:
       topic: "zigbee2mqtt/{{ device_name }}/set"
