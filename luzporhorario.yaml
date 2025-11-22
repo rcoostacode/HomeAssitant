@@ -1,10 +1,10 @@
 blueprint:
   name: Luz com Horário e Presença
   description: >
-    Automação completa:
-    - Liga/Desliga em horários fixos.
-    - Liga por presença (se habilitado).
-    - Desliga por ausência após tempo (se habilitado).
+    Automação híbrida:
+    1. Liga/Desliga em horários fixos.
+    2. Liga por presença se estiver fora do horário e sol acima do horizonte.
+    3. Desliga por ausência após X segundos.
   domain: automation
 
   input:
@@ -16,28 +16,28 @@ blueprint:
             domain: [light, switch]
 
     sensor_presenca:
-      name: Sensor de presença
-      description: "Obrigatório para usar as funções de movimento."
-      default: ""
+      name: Sensor de presença (Obrigatório)
+      description: Selecione o sensor que detecta movimento.
       selector:
         entity:
           domain: binary_sensor
 
     usar_sensor_presenca:
-      name: Habilitar sensor de presença?
-      default: false
+      name: Ativar regra de presença?
+      description: Se desligado, só obedece aos horários fixos.
+      default: true
       selector:
         boolean:
 
     sensor_lux:
-      name: Sensor de luminosidade
+      name: Sensor de luminosidade (Opcional)
       default: ""
       selector:
         entity:
           domain: sensor
 
     usar_sensor_lux:
-      name: Usar sensor de luminosidade?
+      name: Usar sensor de luminosidade no horário fixo?
       default: false
       selector:
         boolean:
@@ -104,7 +104,7 @@ variables:
 action:
   - choose:
       # ---------------------------------------------------------
-      # CENÁRIO 1: Horário de Ligar (verifica Lux se necessário)
+      # 1: Horário de Ligar (verifica Lux se ativado)
       # ---------------------------------------------------------
       - conditions:
           - condition: trigger
@@ -118,7 +118,7 @@ action:
             target: !input luzes
 
       # ---------------------------------------------------------
-      # CENÁRIO 2: Horário de Desligar
+      # 2: Horário de Desligar (Fixo)
       # ---------------------------------------------------------
       - conditions:
           - condition: trigger
@@ -128,14 +128,14 @@ action:
             target: !input luzes
 
       # ---------------------------------------------------------
-      # CENÁRIO 3: Movimento Detectado (Ligar)
+      # 3: Movimento (Ligar)
+      #    Regra: Presença Ativa + Sol visível + FORA do horário noturno
       # ---------------------------------------------------------
       - conditions:
           - condition: trigger
             id: "motion_on"
           - condition: template
             value_template: "{{ usar_presenca }}"
-          # Mantive sua lógica de 'sun' e horários aqui, ajuste se necessário:
           - condition: template
             value_template: >
               {{ is_state('sun.sun', 'above_horizon') and
@@ -145,7 +145,8 @@ action:
             target: !input luzes
 
       # ---------------------------------------------------------
-      # CENÁRIO 4: Ausência Detectada (Desligar)
+      # 4: Ausência (Desligar)
+      #    Regra: Presença Ativa + Sensor ficou OFF pelo tempo configurado
       # ---------------------------------------------------------
       - conditions:
           - condition: trigger
