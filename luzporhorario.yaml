@@ -1,42 +1,43 @@
 blueprint:
   name: Liga e Desliga Luz por Horario
   description: >
-    Funciona agora apenas com horário.
-    Se você adicionar um sensor de presença no futuro, ele ativará a lógica de movimento automaticamente.
+    - 18h às 00h: Liga direto.
+    - 00h: Desliga.
+    - 00h até Amanhecer: Liga só com movimento.
+    - Dia: Não liga.
   domain: automation
 
   input:
     luzes:
-      name: Luz(es) ou Switch(es)
+      name: Luz(es)
       selector:
         target:
           entity:
             domain: [light, switch]
 
     horario_inicio:
-      name: Horário para LIGAR
+      name: Horário LIGAR fixo
       default: "18:00:00"
       selector:
         time:
 
     horario_fim:
-      name: Horário para DESLIGAR
+      name: Horário DESLIGAR fixo (Início da Madrugada)
       default: "00:00:00"
       selector:
         time:
 
-    # Sensor agora é opcional e tem um default vazio seguro
     sensor_presenca:
-      name: Sensor de presença (Futuro)
-      description: Deixe vazio por enquanto. Quando tiver o sensor, selecione-o aqui.
+      name: Sensor de Presença (Futuro)
+      description: Deixe vazio se não tiver.
       default: []
       selector:
         entity:
           domain: binary_sensor
-          multiple: true  # Truque para aceitar lista vazia
+          multiple: true
 
     tempo_ausencia:
-      name: Tempo para desligar (quando tiver sensor)
+      name: Tempo para desligar na madrugada
       default: 180
       selector:
         number:
@@ -53,7 +54,7 @@ blueprint:
           multiple: true
 
     limite_lux:
-      name: Limite Lux
+      name: Limite de Lux (Escuro o bastante?)
       default: 20
       selector:
         number:
@@ -61,7 +62,7 @@ blueprint:
           max: 5000
 
 trigger:
-  # 1. Horários (Sempre funcionam)
+  # 1. Horários
   - platform: time
     at: !input horario_inicio
     id: "time_on"
@@ -70,51 +71,41 @@ trigger:
     at: !input horario_fim
     id: "time_off"
 
-  # 2. Presença (Template Trigger seguro)
-  # Só dispara se houver sensor definido E ele mudar para ON
+  # 2. Movimento (Seguro se vazio)
   - platform: template
     id: "motion_on"
     value_template: >
-      {% set sensors = inputs.sensor_presenca %}
-      {% if sensors is defined and sensors|length > 0 %}
-        {{ is_state(sensors[0], 'on') }}
-      {% else %}
-        false
-      {% endif %}
+      {% set s = inputs.sensor_presenca %}
+      {{ s is defined and s|length > 0 and is_state(s[0], 'on') }}
 
-  # 3. Ausência (Template Trigger seguro)
-  # Só dispara se houver sensor definido E ele ficar OFF pelo tempo
+  # 3. Ausência (Seguro se vazio)
   - platform: template
     id: "motion_off"
     value_template: >
-      {% set sensors = inputs.sensor_presenca %}
-      {% if sensors is defined and sensors|length > 0 %}
-        {{ is_state(sensors[0], 'off') }}
-      {% else %}
-        false
-      {% endif %}
+      {% set s = inputs.sensor_presenca %}
+      {{ s is defined and s|length > 0 and is_state(s[0], 'off') }}
     for: !input tempo_ausencia
 
 action:
   - choose:
-      # CENA 1: LIGAR NO HORÁRIO
+      # CENA 1: LIGAR FIXO (INÍCIO DA NOITE)
+      # Verifica Lux se disponível, senão liga direto
       - conditions:
           - condition: trigger
             id: "time_on"
           - condition: template
             value_template: >
-              {% set lux_sensors = inputs.sensor_lux %}
-              {% set limit = inputs.limite_lux %}
-              {% if lux_sensors is defined and lux_sensors|length > 0 %}
-                 {{ states(lux_sensors[0])|float(9999) < limit }}
+              {% set l = inputs.sensor_lux %}
+              {% if l is defined and l|length > 0 %}
+                {{ states(l[0])|float(9999) < inputs.limite_lux }}
               {% else %}
-                 true
+                true
               {% endif %}
         sequence:
           - service: homeassistant.turn_on
             target: !input luzes
 
-      # CENA 2: DESLIGAR NO HORÁRIO
+      # CENA 2: DESLIGAR FIXO (MEIA-NOITE)
       - conditions:
           - condition: trigger
             id: "time_off"
@@ -122,14 +113,21 @@ action:
           - service: homeassistant.turn_off
             target: !input luzes
 
-      # CENA 3: MOVIMENTO (LIGAR)
+      # CENA 3: MOVIMENTO NA MADRUGADA (LIGAR)
+      # Regra: Sol ABAIXO do horizonte (noite) E fora do horário fixo
       - conditions:
           - condition: trigger
             id: "motion_on"
           - condition: template
             value_template: >
-              {{ is_state('sun.sun', 'above_horizon') and
-                 not (inputs.horario_inicio <= now().strftime('%H:%M:%S') <= inputs.horario_fim) }}
+              {{ is_state('sun.sun', 'below_horizon') }}
+          - condition: template
+            value_template: >
+              {% set inicio = inputs.horario_inicio %}
+              {% set fim = inputs.horario_fim %}
+              {% set agora = now().strftime('%H:%M:%S') %}
+              {# Só liga se NÃO estiver no período fixo (já estaria ligada) #}
+              {{ not (inicio <= agora or agora <= fim) if inicio > fim else not (inicio <= agora <= fim) }}
         sequence:
           - service: homeassistant.turn_on
             target: !input luzes
