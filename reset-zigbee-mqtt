@@ -1,0 +1,21 @@
+blueprint:
+  name: Resetar dispositivo Zigbee2MQTT com seleção
+  description: Blueprint para resetar dispositivo Zigbee2MQTT enviando comando MQTT. Escolha o dispositivo pela lista.
+  domain: automation
+  input:
+    dispositivo:
+      name: Dispositivo Zigbee2MQTT
+      description: Escolha a entidade do dispositivo Zigbee2MQTT a ser resetada
+      selector:
+        entity:
+          domain: zigbee2mqtt
+
+  trigger:
+    platform: manual
+
+  action:
+  - service: mqtt.publish
+    data:
+      topic: >
+        zigbee2mqtt/{{ dispositivo.attributes.friendly_name }}/set
+      payload: '{"reset": true}'
