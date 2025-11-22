@@ -1,6 +1,6 @@
 blueprint:
-  name: Desliga Luzes quando não há Presença
-  description: Desliga uma ou mais luzes quando o sensor fica sem presença por um tempo.
+  name: Desliga Luzes quando Presença Some
+  description: Desliga uma ou mais luzes quando o sensor de presença fica em falso por um tempo.
   domain: automation
 
   input:
@@ -31,15 +31,23 @@ blueprint:
 
 mode: restart
 
+# Dispara quando PASSA a ter presença
 trigger:
   - platform: state
     entity_id: !input motion_sensor
-    to: "off"           # troque aqui para o estado exato: off / clear / false...
-    for:
-      seconds: !input no_motion_wait
+    to: "true"
 
 condition: []
 
 action:
+  # Espera o sensor ficar falso por X segundos
+  - wait_for_trigger:
+      - platform: state
+        entity_id: !input motion_sensor
+        to: "false"
+        for:
+          seconds: !input no_motion_wait
+
+  # Quando a espera termina, desliga tudo
   - service: homeassistant.turn_off
     target: !input target_lights
