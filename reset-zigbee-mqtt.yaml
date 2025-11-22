@@ -8,15 +8,15 @@ blueprint:
   input:
     trigger_button:
       name: Botão para acionar
-      description: Input_button, input_boolean, switch, etc.
+      description: Entidade que dispara (input_button, switch, etc.)
       selector:
         entity: {}
 
     z2m_device_name:
       name: Nome do dispositivo no Zigbee2MQTT
-      description: Exatamente como aparece no Z2M (ex: "sala_lampada", "0x842e14fffec12a9b")
+      description: Exatamente como aparece no Z2M (ex: sala_lampada ou 0x842e14fffec12a9b)
       selector:
-        text: {}
+        text:
 
 trigger:
   - platform: state
@@ -26,7 +26,6 @@ action:
   - service: mqtt.publish
     data:
       topic: zigbee2mqtt/bridge/request/device/reconfigure
-      payload: >
-        {"id":"{{ (z2m_device_name) }}"}
+      payload: "{{ {'id': z2m_device_name } | tojson }}"
 
 mode: single
