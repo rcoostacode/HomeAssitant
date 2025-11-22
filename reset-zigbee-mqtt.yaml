@@ -1,6 +1,6 @@
 blueprint:
-  name: Resetar Dispositivo Zigbee2MQTT (Manual)
-  description: Envia comando de reset via MQTT para o dispositivo selecionado. O nome do dispositivo no HA deve corresponder ao friendly_name no Z2M.
+  name: Resetar Dispositivo Zigbee2MQTT
+  description: Envia comando de reset via MQTT para o dispositivo selecionado. O nome no HA deve ser igual ao do Z2M.
   domain: automation
   input:
     target_device:
@@ -14,10 +14,10 @@ trigger:
   - platform: manual
 
 variables:
-  # Captura o ID do dispositivo selecionado no input
-  target_device_id: !input target_device
-  # Tenta obter o nome do dispositivo para usar no tópico
-  device_name: "{{ device_attr(target_device_id, 'name') }}"
+  # Cria uma variável com o dispositivo escolhido no input
+  target_device_input: !input target_device
+  # Extrai o nome "amigável" do dispositivo para usar no tópico
+  device_name: "{{ device_attr(target_device_input, 'name') }}"
 
 action:
   - service: mqtt.publish
