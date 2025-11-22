@@ -1,117 +1,49 @@
 blueprint:
-  name: Liga e Desliga Luzes no Horario Determinado
-  description: >
-    - Liga no horário inicial.
-    - Desliga no horário final.
-    - Na madrugada (após desligar), acende se houver movimento (se tiver sensor).
+  name: Liga/Desliga Luz por Horario Determinado
+  description: Apenas liga e desliga as luzes nos horários programados.
   domain: automation
 
   input:
     luzes:
-      name: Luz(es)
+      name: Luz(es) para controlar
       selector:
         target:
           entity:
             domain: [light, switch]
 
-    horario_inicio:
+    horario_ligar:
       name: Horário para LIGAR
       default: "18:00:00"
       selector:
         time:
 
-    horario_fim:
-      name: Horário para DESLIGAR (Início Madrugada)
+    horario_desligar:
+      name: Horário para DESLIGAR
       default: "00:00:00"
       selector:
         time:
 
-    sensor_presenca:
-      name: Sensor de Presença (Opcional)
-      description: Se não tiver, deixe vazio.
-      default: []
-      selector:
-        entity:
-          domain: binary_sensor
-          multiple: true
-
-    tempo_ausencia:
-      name: Tempo para desligar na madrugada
-      default: 180
-      selector:
-        number:
-          min: 5
-          max: 3600
-          unit_of_measurement: seconds
-
 trigger:
-  # 1. Horários
   - platform: time
-    at: !input horario_inicio
-    id: "time_on"
+    at: !input horario_ligar
+    id: "ligar"
 
   - platform: time
-    at: !input horario_fim
-    id: "time_off"
-
-  # 2. Movimento (Trigger seguro)
-  - platform: template
-    id: "motion_on"
-    value_template: >
-      {% set s = inputs.sensor_presenca %}
-      {{ s is defined and s|length > 0 and is_state(s[0], 'on') }}
-
-  # 3. Ausência (Trigger seguro)
-  - platform: template
-    id: "motion_off"
-    value_template: >
-      {% set s = inputs.sensor_presenca %}
-      {{ s is defined and s|length > 0 and is_state(s[0], 'off') }}
-    for: !input tempo_ausencia
+    at: !input horario_desligar
+    id: "desligar"
 
 action:
   - choose:
-      # CENA 1: LIGAR NO HORÁRIO (Sem frescura)
       - conditions:
           - condition: trigger
-            id: "time_on"
+            id: "ligar"
         sequence:
           - service: homeassistant.turn_on
             target: !input luzes
 
-      # CENA 2: DESLIGAR NO HORÁRIO
       - conditions:
           - condition: trigger
-            id: "time_off"
-        sequence:
-          - service: homeassistant.turn_off
-            target: !input luzes
-
-      # CENA 3: MOVIMENTO NA MADRUGADA
-      - conditions:
-          - condition: trigger
-            id: "motion_on"
-          - condition: template
-            value_template: "{{ is_state('sun.sun', 'below_horizon') }}"
-          - condition: template
-            value_template: >
-              {% set inicio = inputs.horario_inicio %}
-              {% set fim = inputs.horario_fim %}
-              {% set agora = now().strftime('%H:%M:%S') %}
-              {# Só liga se NÃO estiver no horário fixo #}
-              {% if inicio < fim %}
-                {{ not (inicio <= agora <= fim) }}
-              {% else %}
-                {{ not (inicio <= agora or agora <= fim) }}
-              {% endif %}
-        sequence:
-          - service: homeassistant.turn_on
-            target: !input luzes
-
-      # CENA 4: AUSÊNCIA
-      - conditions:
-          - condition: trigger
-            id: "motion_off"
+            id: "desligar"
         sequence:
           - service: homeassistant.turn_off
             target: !input luzes
