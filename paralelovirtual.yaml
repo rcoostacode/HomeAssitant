@@ -6,30 +6,23 @@ blueprint:
     entrada_switchs:
       name: Escolha os pontos de Iluminação
       selector:
-            entity:
-              domain:
-                - switch
-                - light
-              multiple: true
+        entity:
+          domain:
+            - switch
+            - light
+          multiple: true
+
+mode: restart
 
 trigger:
-  platform: state
-  entity_id: !input entrada_switchs
+  - platform: state
+    entity_id: !input entrada_switchs
+
+condition:
+  - condition: template
+    value_template: "{{ trigger.to_state.state in ['on', 'off'] }}"
 
 action:
-  - service: >
-      {% if trigger.to_state.state == "on" %}
-        homeassistant.turn_on
-      {% elif trigger.to_state.state == "off" %}
-        homeassistant.turn_off
-      {% endif %}
+  - service: "homeassistant.turn_{{ trigger.to_state.state }}"
     target:
-      entity_id:
-        !input entrada_switchs
-  - delay:
-      hours: 0
-      minutes: 0
-      seconds: 1
-      milliseconds: 0
-
-mode: single
+      entity_id: !input entrada_switchs
