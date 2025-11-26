@@ -19,10 +19,26 @@ trigger:
     entity_id: !input entrada_switchs
 
 condition:
+  # Só reage se for on/off
   - condition: template
-    value_template: "{{ trigger.to_state.state in ['on', 'off'] }}"
+    value_template: >
+      {{ trigger.to_state.state in ['on', 'off'] }}
+
+  # Evita ficar chamando serviço se todos já estão no mesmo estado
+  - condition: template
+    value_template: >
+      {% set ents = iif(is_list(blueprints.input.entrada_switchs),
+                        blueprints.input.entrada_switchs,
+                        [blueprints.input.entrada_switchs]) %}
+      {% set desired = trigger.to_state.state %}
+      {% for e in ents %}
+        {% if states(e) != desired %}
+          {{ true }}
+        {% endif %}
+      {% endfor %}
 
 action:
-  - service: "homeassistant.turn_{{ trigger.to_state.state }}"
+  - service: >
+      homeassistant.turn_{{ trigger.to_state.state }}
     target:
       entity_id: !input entrada_switchs
