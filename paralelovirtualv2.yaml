@@ -1,5 +1,5 @@
 blueprint:
-  name: Paralelo Virtual V3
+  name: Paralelo Virtual V2
   description: Acenda/Apaga todos os switchs/lights do grupo simultaneamente
   domain: automation
   input:
